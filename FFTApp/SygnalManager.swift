@@ -23,7 +23,7 @@ final class SygnalManager {
         // Set up the audio format for the input
         let inputFormat = inputNode.inputFormat(forBus: 0)
 
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: inputFormat, block: block)
+        inputNode.installTap(onBus: 0, bufferSize: 8192, format: inputFormat, block: block)
     }
 
     func startObservingInputSygnal() {
@@ -73,9 +73,10 @@ extension SygnalManager {
     typealias ChannelCount = Int
     typealias SamplesCount = Int
     typealias MaxMagnitude = Float
+    typealias FrequencyResolution = Float
 
     static func performFFT(on buffer: AVAudioPCMBuffer,
-                           metricsBlock: @escaping (FrameCount, ChannelCount, SamplesCount, MaxMagnitude) -> Void
+                           metricsBlock: @escaping (FrameCount, ChannelCount, SamplesCount, MaxMagnitude, FrequencyResolution) -> Void
     ) -> [Float]? {
         // Check if the buffer contains float channel data
         guard let floatChannelData = buffer.floatChannelData else {
@@ -86,6 +87,9 @@ extension SygnalManager {
         let channelCount = Int(buffer.format.channelCount)
         let frameCount = Int(buffer.frameLength)
         let sampleCount = channelCount * frameCount
+
+        // Calculate the sample rate of the audio buffer
+        let sampleRate = Float(buffer.format.sampleRate)
 
         // Create an array to store the float samples
         var floatSamples = [Float](repeating: 0.0, count: sampleCount)
@@ -126,11 +130,12 @@ extension SygnalManager {
         vDSP_zvabs(&complexBuffer, 1, &magnitudes, 1, vDSP_Length(bufferSize / 2))
 
         // Scale the magnitudes by a factor of 4.0 / bufferSize
-        var scalingFactor = 4.0 / Float(bufferSize)
+        var scalingFactor = 2.0 / Float(bufferSize)
         vDSP_vsmul(magnitudes, 1, &scalingFactor, &magnitudes, 1, vDSP_Length(bufferSize / 2))
 
-        metricsBlock(frameCount, channelCount, sampleCount, magnitudes.max() ?? 0.0)
+        metricsBlock(frameCount, channelCount, sampleCount, magnitudes.max() ?? 0.0, sampleRate / Float(frameCount))
 
         return magnitudes
     }
+
 }
